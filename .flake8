@@ -1,0 +1,13 @@
+[flake8]
+max-line-length = 88
+ignore= 
+    W293
+    W503
+    E203
+    E501
+    F541
+    E731 # assign lambda. I like doing that quite often. most the time it is not an issue...
+    E741 # short variable names
+
+# unused imports in the inits
+per-file-ignores = __init__.py: F401 

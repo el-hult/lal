@@ -1,0 +1,22 @@
+name: napoleon
+channels:
+  - pytorch
+  - defaults
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - scikit-learn
+  - pandas
+  - matplotlib>=3.4 # use of `stairs` need >=3.4
+  - statsmodels
+  - pytorch
+  - torchvision
+  #- cpuonly # uncomment the appropriate line depending on if you are using GPU or not
+  #- cudatoolkit=11.4
+  - tqdm
+  - freetype=2.10.4|>2.11 # bugfix for https://github.com/matplotlib/matplotlib/issues/21511 I guess that versions after 2.11.0 will work okay too
+  - pip>=21.3 # to enable editable installs with pyproject.toml
+  - pip:
+      - --editable .
+
