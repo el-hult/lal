@@ -1,5 +1,5 @@
 """
-Compare the interval length and the empirical coverage rate, 
+Compare the interval length and the empirical coverage rate,
 for a different given confidence levels
 """
 
@@ -154,7 +154,7 @@ if opts.loss_plot_lims[0] < loss.min():
 ax.step(
     ellbar,
     alphas,
-    label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}})$",
+    label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}}_1)$",
     color="C2",
     ls="solid",
     where="post",
@@ -187,7 +187,7 @@ if opts.loss_plot_lims[0] < loss.min():
 ax.step(
     ellbar,
     alphas,
-    label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}})$",
+    label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}}_2)$",
     color="C1",
     ls="solid",
     where="post",
@@ -203,6 +203,7 @@ ax.set_xlim(opts.loss_plot_lims)
 ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
 ax.xaxis.set_major_formatter(mtick.PercentFormatter(xmax=1, decimals=0))
 ax.set_xlabel("$\\bar{{\\ell}}_{{\\alpha}}$")
+ax.legend()
 fig.savefig(os.path.join(ofolder, "penguin.pdf"))
 
 #
