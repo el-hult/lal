@@ -13,6 +13,8 @@ import pandas as pd
 def cache_download(path, url):
     """Downloads url to path, if nonexistent"""
     # https://stackoverflow.com/questions/7243750/download-file-from-web-in-python-3
+    dir = pathlib.Path(path).parent
+    dir.mkdir(parents=True, exist_ok=True)
     if not os.path.isfile(path):
         with urllib.request.urlopen(url) as response, open(path, "wb") as out_file:
             shutil.copyfileobj(response, out_file)
