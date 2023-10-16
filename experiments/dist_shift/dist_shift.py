@@ -14,24 +14,23 @@ import sklearn.utils
 import matplotlib.ticker as mtick
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib
 import numpy as np
 import argparse
 import logging
 import sys
+import pathlib
 
-
-EXPNAME = "ccdf"
 
 #
 # Init logging
 #
-ofolder = os.path.join(
-    "output", EXPNAME, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-)
-os.makedirs(ofolder, exist_ok=True)
+ofolder = pathlib.Path(__file__).parent / "output"
+ofolder.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
-TARGETS = logging.StreamHandler(sys.stdout), logging.FileHandler(
-    os.path.join(ofolder, "transcript.log")
+TARGETS = (
+    logging.StreamHandler(sys.stdout),
+    logging.FileHandler(ofolder / "transcript.log"),
 )
 FORMAT = "%(asctime)s | %(name)14s | %(levelname)7s | %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers=TARGETS)
@@ -44,7 +43,9 @@ logging.getLogger("matplotlib").setLevel(logging.WARN)
 opts = argparse.Namespace(loss_plot_lims=[0, 5], mc_size=2_000, seed=999)
 ndata_train = 100
 ndata = 30
-loss_fn = lambda f, x, y: np.abs(y - f.predict(x))
+def loss_fn(f, x, y): return np.abs(y - f.predict(x))
+
+
 plt.rcParams.update(
     {
         "font.size": 8,
@@ -66,22 +67,23 @@ logger.info(f"Using config: {opts}")
 #
 class Cubic:
     def cef(self, x):
+        """Conditional Expectation Function"""
         return x * (x - 1) * (x + 1)
 
     def gen_data_train(self, n, rng):
-        X = rng.normal(scale=0.5, loc=1, size=(n, 1))
-        x = X.squeeze()
-        y = self.cef(x) + rng.normal(size=n, scale=1)
-        return X, y
+        return self.gen_data(n=n,rng=rng,x_std=0.5,x_mean=1)
 
     def gen_data_test(self, n, rng, *, shift=False):
         if not shift:
-
-            X = rng.normal(scale=0.5, loc=1, size=(n, 1))
+            return self.gen_data(n=n,rng=rng,x_std=0.5,x_mean=1)
         else:
-            X = rng.normal(scale=0.75, loc=0.75, size=(n, 1))
-
-        y = self.cef(X.squeeze()) + rng.normal(size=n, scale=1)
+            return self.gen_data(n=n,rng=rng,x_std=0.75,x_mean=0.75)
+    
+    def gen_data(self, n, rng:np.random.Generator, x_std,x_mean):
+        """Generate a X,y pair"""
+        X = rng.normal(scale=x_std, loc=x_mean, size=(n, 1))
+        x = X.squeeze()
+        y = self.cef(x) + rng.normal(size=n, scale=1)
         return X, y
 
 
@@ -118,49 +120,118 @@ ax_data.scatter(X_test2, y_test2, label="$\\mathcal{D}_2$")
 ax_data.set_xlabel("x")
 ax_data.set_ylabel("y")
 ax_data.legend()
-plt.tight_layout()
-fig.savefig(os.path.join(ofolder, f"{EXPNAME}-data.pdf"))
+fig.tight_layout()
+fig.savefig(ofolder / f"dist_shift-data.pdf")
 logger.info("Done with data plot")
 
 
 #
 # Plot level-alpha-loss curves
 #
-losses = [loss_fn(model, X_test1, y_test1), loss_fn(model, X_test2, y_test2)]
-loss_obs_max = max([loss.max() for loss in losses])
+def plot_lal_curves(losses: list, labels:list, colors: list):
+    """
+    Args:
 
-fig, ax_lalc = plt.subplots()
+    Retruns:
+        fig,ax tuple
+    """
+    assert len(losses) == len(labels) == len(colors)
+    fig, ax = plt.subplots()
 
-for l, loss in enumerate(losses):
-    alphas = 1 - (np.arange(len(loss)) + 1) / (len(loss) + 1)
-    ellbar = np.sort(loss)
-    # Add data for correct plotting
-    if opts.loss_plot_lims[-1] > loss.max():
-        alphas = np.append(alphas, 0)
-        ellbar = np.append(ellbar, opts.loss_plot_lims[-1] + 0.01)
-    if opts.loss_plot_lims[0] < loss.min():
-        alphas = np.insert(alphas, 0, 1)
-        ellbar = np.insert(ellbar, 0, opts.loss_plot_lims[0] - 0.01)
+    for label, loss,color in zip(labels,losses,colors):
+        alphas = 1 - (np.arange(len(loss)) + 1) / (len(loss) + 1)
+        ellbar = np.sort(loss)
+        
+        # Add data for correct plotting
+        if opts.loss_plot_lims[-1] > loss.max():
+            alphas = np.append(alphas, 0)
+            ellbar = np.append(ellbar, opts.loss_plot_lims[-1] + 0.01)
+        if opts.loss_plot_lims[0] < loss.min():
+            alphas = np.insert(alphas, 0, 1)
+            ellbar = np.insert(ellbar, 0, opts.loss_plot_lims[0] - 0.01)
 
-    ax_lalc.step(
-        ellbar,
-        alphas,
-        label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}}_{{{str(l + 1)}}})$",
-        color="C" + str(l),
-        ls="solid",
-        where="post",
+        ax.step(
+            ellbar,
+            alphas,
+            label=label,
+            color=color,
+            ls="solid",
+            where="post",
+        )
+
+    ax.set_ylim([0, 1])
+    # ax.set_xlim(opts.loss_plot_lims)
+    ax.set_ylabel("$\\alpha$")
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
+    ax.set_xlabel("$\\ell_{{\\alpha}}^{{\\beta}}$")
+    fig.tight_layout()
+    return fig,ax
+
+
+fig,ax = plot_lal_curves(
+    labels= [
+        f"$\\ell_{{\\alpha}}^{{\\beta}}(\\mathcal{{D}}_{{1}})$",
+        f"$\\ell_{{\\alpha}}^{{\\beta}}(\\mathcal{{D}}_{{2}})$",
+        ],
+    colors=['C0','C1'],
+    losses=[
+        loss_fn(model, X_test1, y_test1),
+        loss_fn(model, X_test2, y_test2),
+        ],
     )
+plot_path=ofolder / f"dist_shift-curves.pdf"
+fig.savefig(plot_path)
+logger.info(f"Saved plot to {plot_path.absolute()}")
+ax.legend()
 
-ax_lalc.legend()
-ax_lalc.set_ylim([0, 1])
-ax_lalc.set_xlim(opts.loss_plot_lims)
-ax_lalc.set_ylabel("$\\alpha$")
-ax_lalc.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
-ax_lalc.set_xlabel("$\\bar{{\\ell}}_{{\\alpha}}$")
-plt.tight_layout()
-fig.savefig(os.path.join(ofolder, f"{EXPNAME}-curves.pdf"))
-logger.info("Done with level alpha loss curves")
 
+#
+# Remake the curve for two kinds of varying shift strengths
+#
+ms = np.linspace(0.5,3,10)
+norm= mcolors.Normalize(vmin=ms.min(),vmax=ms.max())
+cmap = matplotlib.colormaps['viridis']
+labels,colors,losses = zip(*[
+    (f"$\\mu={m}$",cmap(norm(m)),loss_fn(model, *data_generator.gen_data(n=ndata,rng=np.random.default_rng(opts.seed),x_std=0.5,x_mean=m))) for m in ms
+])
+fig,ax = plot_lal_curves(
+    labels= labels,
+    colors=colors,
+    losses=losses,
+    )
+plot_path=ofolder / f"dist_shift-mean_shift-curves.pdf"
+fig.savefig(plot_path)
+logger.info(f"Saved plot to {plot_path.absolute()}")
+
+stds = np.linspace(0.5,2,10)
+norm= mcolors.Normalize(vmin=stds.min(),vmax=stds.max())
+cmap = matplotlib.colormaps['viridis']
+labels,colors,losses = zip(*[
+    (f"$\\sigma={std}$",cmap(norm(std)),loss_fn(model, *data_generator.gen_data(n=ndata,rng=np.random.default_rng(opts.seed),x_mean=0.5,x_std=std))) for std in stds
+])
+fig,ax = plot_lal_curves(
+    labels= labels,
+    colors=colors,
+    losses=losses,
+    )
+plot_path=ofolder / f"dist_shift-std_shift-curves.pdf"
+fig.savefig(plot_path)
+logger.info(f"Saved plot to {plot_path.absolute()}")
+
+stds = np.linspace(0.05,0.5,10)
+norm= mcolors.Normalize(vmin=stds.min(),vmax=stds.max())
+cmap = matplotlib.colormaps['viridis_r']
+labels,colors,losses = zip(*[
+    (f"$\\sigma={std}$",cmap(norm(std)),loss_fn(model, *data_generator.gen_data(n=ndata,rng=np.random.default_rng(opts.seed),x_mean=0.5,x_std=std))) for std in stds
+])
+fig,ax = plot_lal_curves(
+    labels= labels,
+    colors=colors,
+    losses=losses,
+    )
+plot_path=ofolder / f"dist_shift-std_shift_r-curves.pdf"
+fig.savefig(plot_path)
+logger.info(f"Saved plot to {plot_path.absolute()}")
 
 #
 # Make MC runs to compute empirical coverage
@@ -214,12 +285,13 @@ ax_coverage.plot(
     zeroOne, zeroOne - 1 / (1 + ndata), color="black", linestyle="dashed", alpha=0.3
 )
 ax_coverage.set_xlabel("$\\alpha$")
-ax_coverage.set_ylabel("$\mathbb{P}[L_{n+1} > \\bar \\ell_{\\alpha}(\mathcal{D})]$")
+ax_coverage.set_ylabel(
+    "$\mathbb{P}[L_{n+1} > \\ell_{{\\alpha}}^{{\\beta}}(\mathcal{D})]$")
 ax_coverage.set_ylim([0, 1])
 ax_coverage.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
 ax_coverage.xaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
 ax_coverage.set_xlim([0, 1])
-fig.savefig(os.path.join(ofolder, "{EXPNAME}-coverage.pdf"))
+fig.savefig(ofolder / f"dist_shift-coverage.pdf")
 logger.info("Completed MC for coverage plot")
 
 
@@ -283,11 +355,11 @@ ax_converge.set_xlim([0, 1])
 ax_converge.xaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
 ax_converge.set_xlabel("$\\alpha$")
 ax_converge.set_ylabel("Expected Ratio")
-fig2.savefig(os.path.join(ofolder, "{EXPNAME}-sizes.pdf"))
+fig2.savefig(ofolder / "dist_shift-sizes.pdf")
 
 
 #
 # Finalize
 #
 logger.info("Done!")
-plt.show()
+# plt.show()

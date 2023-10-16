@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+import pathlib
 
 import lib
 import matplotlib.pyplot as plt
@@ -26,16 +27,13 @@ import sklearn.utils
 #
 # Init logging
 #
-EXPNAME = "penguin"
-
-ofolder = os.path.join(
-    "output", EXPNAME, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-)
+ofolder = pathlib.Path(__file__).parent / "output"
 os.makedirs(ofolder, exist_ok=True)
 
 logger = logging.getLogger(__name__)
-TARGETS = logging.StreamHandler(sys.stdout), logging.FileHandler(
-    os.path.join(ofolder, "transcript.log")
+TARGETS = (
+    logging.StreamHandler(sys.stdout),
+    logging.FileHandler(os.path.join(ofolder, "transcript.log")),
 )
 FORMAT = "%(asctime)s | %(name)14s | %(levelname)7s | %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers=TARGETS)
@@ -66,13 +64,7 @@ rng = np.random.default_rng(ss.generate_state(1)[0])
 logger.info(f"Config: {opts}")
 with open(os.path.join(ofolder, "config.json"), "w") as f:
     json.dump(
-        {
-            "ofolder": ofolder,
-            "args": vars(opts),
-            "argv": sys.argv,
-        },
-        f,
-        indent=2,
+        {"ofolder": str(ofolder), "args": vars(opts), "argv": sys.argv,}, f, indent=2,
     )
 
 
@@ -132,12 +124,12 @@ model.fit(X_model, y_model)
 
 
 #
-# Compute and plot a n in-distribution curve
+# Compute and plot an in-distribution curve
 #
 fig, ax = plt.subplots()
 
 # Compute level-alpha-losses, and plot
-idx = rng.choice(np.arange(len(X_test)), size=opts.ndata, replace=True)
+idx = rng.choice(np.arange(len(X_test)), size=opts.ndata, replace=False)
 X_data, y_data = X_test.iloc[idx], y_test[idx]
 loss = loss_fn(model, X_data, y_data)
 
@@ -154,7 +146,7 @@ if opts.loss_plot_lims[0] < loss.min():
 ax.step(
     ellbar,
     alphas,
-    label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}}_1)$",
+    label=f"$\\ell_{{\\alpha}}^{{\\beta}}(\\mathcal{{D}}_1)$",
     color="C2",
     ls="solid",
     where="post",
@@ -165,7 +157,7 @@ ax.step(
 #
 weights = loss_fn(model, X_test, y_test)  # model belief in the false Y's
 weights /= weights.sum()
-idx = rng.choice(np.arange(len(X_test)), size=opts.ndata, p=weights, replace=True)
+idx = rng.choice(np.arange(len(X_test)), size=opts.ndata, p=weights, replace=False)
 
 idx_unique, i = np.unique(idx, return_counts=True)
 logger.info(f"These samples are used as adversarial examples: {idx_unique}")
@@ -187,7 +179,7 @@ if opts.loss_plot_lims[0] < loss.min():
 ax.step(
     ellbar,
     alphas,
-    label=f"$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}}_2)$",
+    label=f"$\\ell_{{\\alpha}}^{{\\beta}}(\\mathcal{{D}}_2)$",
     color="C1",
     ls="solid",
     where="post",
@@ -202,7 +194,7 @@ ax.set_ylim(opts.loss_level_plot_lims)
 ax.set_xlim(opts.loss_plot_lims)
 ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
 ax.xaxis.set_major_formatter(mtick.PercentFormatter(xmax=1, decimals=0))
-ax.set_xlabel("$\\bar{{\\ell}}_{{\\alpha}}$")
+ax.set_xlabel("$\\ell_{{\\alpha}}^{{\\beta}}$")
 ax.legend()
 fig.savefig(os.path.join(ofolder, "penguin.pdf"))
 

@@ -11,10 +11,9 @@ http://dx.doi.org/10.1109/ACCESS.2019.2915109
 
 """
 import argparse
-import datetime
 import logging
-import os
 import sys
+import pathlib
 
 import lib
 import matplotlib.pyplot as plt
@@ -26,15 +25,12 @@ import statsmodels.api as sm
 #
 # Init logging
 #
-EXPNAME = "earthquakes"
-ofolder = os.path.join(
-    "output", EXPNAME, datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-)
-os.makedirs(ofolder, exist_ok=True)
+ofolder = pathlib.Path(__file__).parent / "output"
+ofolder.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 TARGETS = (
     logging.StreamHandler(sys.stdout),
-    logging.FileHandler(os.path.join(ofolder, "transcript.log")),
+    logging.FileHandler(ofolder  / "transcript.log"),
 )
 FORMAT = "%(asctime)s | %(name)14s | %(levelname)7s | %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers=TARGETS)
@@ -55,6 +51,7 @@ plt.rcParams.update(
     }
 )
 np.random.seed(opts.seed)
+logger.info(opts)
 
 #
 # Generate data
@@ -88,17 +85,22 @@ def fit_negbin(Z):
     sigma2 = mu + mu * mu * alpha
     p = mu / sigma2
     n = mu * mu / (sigma2 - mu)
-    return sps.nbinom(n, p)
+    model = sps.nbinom(n, p)
+    aic = 2*1-2*model.logpmf(Z).sum()
+    return model, aic
 
 
 def fit_poisson(Z):
     """Maximum likliehood poisson model"""
-    return sps.poisson(Z.mean())
+    model:sps.rv_discrete = sps.poisson(Z.mean())
+    aic = 2*1-2*model.logpmf(Z).sum()
+    return model, aic
 
 
-model1 = fit_poisson(Z_train)
-model2 = fit_negbin(Z_train)
+model1, aic1 = fit_poisson(Z_train)
+model2, aic2 = fit_negbin(Z_train)
 
+logger.info(f"AIC values for each model: poisson: {aic1}, {aic2}")
 
 #
 # Check the pdfs vs histogram
@@ -119,7 +121,7 @@ ax.hist(
 ax.plot(xs, model1.pmf(xs), label="Poisson")
 ax.plot(xs, model2.pmf(xs), label="NegBin")
 ax.legend()
-fig.savefig(os.path.join(ofolder, f"{EXPNAME}_data.pdf"))
+fig.savefig(ofolder / f"earthquake_data.pdf")
 
 
 #
@@ -140,18 +142,19 @@ for k, (label, model) in enumerate([("Poisson", model1), ("NegBin", model2)]):
         ellbar = np.insert(ellbar, 0, opts.loss_plot_lims[0] - 0.01)
 
     ax.step(ellbar, alphas, label=label, color=f"C{k}", ls="solid", where="post")
+    logger.info(f"The average loss for model {label} on the calibration data is {loss.mean()}")
 
 ax.set_ylim([0, 1])
 ax.set_xlim(opts.loss_plot_lims)
 ax.set_ylabel("$\\alpha$")
 ax.legend()
 ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1))
-ax.set_xlabel("$\\bar{{\\ell}}_{{\\alpha}}(\\mathcal{{D}})$")
+ax.set_xlabel("$\\ell_{{\\alpha}}^{{\\beta}}(\\mathcal{{D}})$")
 
-fig.savefig(os.path.join(ofolder, f"{EXPNAME}_losscurve.pdf"))
+fig.savefig(ofolder /  f"earthquake_losscurve.pdf")
 
 #
 # Finalize
 #
-logger.info(f"finished output to {os.path.abspath(ofolder)}")
+logger.info(f"finished output to {ofolder.absolute()}")
 plt.show()

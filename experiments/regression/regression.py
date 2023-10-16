@@ -8,6 +8,7 @@ import matplotlib.ticker as mtick
 import lib
 import numpy as np
 import argparse
+import pathlib
 
 import os
 import datetime
@@ -18,14 +19,10 @@ import sklearn.pipeline
 
 import sys
 
-EXPNAME = "airfoil"
-
 #
 # Init Logging
 #
-ofolder = os.path.join(
-    "output", EXPNAME, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-)
+ofolder = pathlib.Path(__file__).parent / "output"
 os.makedirs(ofolder, exist_ok=True)
 logger = logging.getLogger(__name__)
 TARGETS = logging.StreamHandler(sys.stdout), logging.FileHandler(
@@ -151,7 +148,7 @@ for label, loss, linestyle, color in [
     ax.step(
         ellbar,
         alphas,
-        label=f"$\\bar{{\\ell}}_{{\\alpha}}$ {label}",
+        label=f"$\\ell_{{\\alpha}}^{{\\beta}}$ {label}",
         linestyle=linestyle,
         where="post",
         color=color,
@@ -161,7 +158,7 @@ ax.legend()
 ax.set_xlim(opts.loss_plot_lims)
 ax.set_ylim(opts.alpha_plot_lims)
 ax.set_ylabel("$\\alpha$")
-ax.set_xlabel("$\\bar{\\ell}_{\\alpha}}$")
+ax.set_xlabel("$\\ell_{{\\alpha}}^{{\\beta}}$")
 ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1, decimals=0))
 plt.tight_layout()
 fig.savefig(os.path.join(ofolder, f"airfoil.pdf"))

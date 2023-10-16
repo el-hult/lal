@@ -5,7 +5,7 @@ from typing import Union
 import urllib.request
 import shutil
 from pandas.core.frame import DataFrame
-
+import tarfile
 import numpy as np
 import pandas as pd
 
@@ -187,7 +187,7 @@ def palmer_penguins():
             dfs.append(pd.read_csv(fname))
 
         df = pd.concat(dfs)
-        df["Species"] = df["Species"].str.extract(r"^([\w]+)").astype("category")
+        df["Species"] = df["Species"].str.extract("^([\w]+)").astype("category")
         df["Island"] = df["Island"].astype("category")
         df["Sex"] = df["Sex"].str.lower().replace(".", np.nan).astype("category")
         df["Year"] = df["Date Egg"].str.slice(0, 4).astype(int)
@@ -227,3 +227,43 @@ def quake_data():
     cache_download(fname, url)
     df = pd.read_csv(fname, parse_dates=["time"])
     return df["time"].groupby([df["time"].dt.year, df["time"].dt.month]).agg("count")
+
+
+def load_cal_housing(cache_path="data"):
+    """ Pace, R. Kelley and Ronald Barry, Sparse Spatial Autoregressions, Statistics and Probability Letters, 33 (1997) 291-297.
+    
+    https://www.dcc.fc.up.pt/~ltorgo/Regression/cal_housing.html
+
+    S&P Letters Data
+    We collected information on the variables using all the block groups in California from the 1990 Census.
+    In this sample a block group on average includes 1425.5 individuals living in a geographically co mpact area.
+    Naturally, the geographical area included varies inversely with the population density.
+    We computed distances among the centroids of each block group as measured in latitude and longitude.
+    We excluded all the block groups reporting zero entries for the independent and dependent variables.
+    The final data contained 20,640 observations on 9 variables. The dependent variable is ln(median house value).
+    """
+    cache_path="data"
+    dir = pathlib.Path(cache_path)
+    os.makedirs(dir, exist_ok=True)
+    gzpath = dir / "cal_housing.tgz"
+    url = r"https://www.dcc.fc.up.pt/~ltorgo/Regression/cal_housing.tgz"
+    cache_download(gzpath, url)
+    data_path = dir / "cal_housing.data"
+    if not data_path.is_file():
+        with tarfile.open(gzpath, "r:gz") as tar,open(data_path,'wb') as data_file :
+            file_inside_tar = r'CaliforniaHousing/cal_housing.data'
+            shutil.copyfileobj(tar.extractfile(file_inside_tar), data_file)
+    names = [
+        "longitude",
+        "latitude",
+        "housingMedianAge", 
+        "totalRooms", 
+        "totalBedrooms", 
+        "population", 
+        "households", 
+        "medianIncome", 
+        "medianHouseValue", 
+    ]
+    df = pd.read_csv(data_path, names=names)
+    assert len(df) == 20640
+    return df
